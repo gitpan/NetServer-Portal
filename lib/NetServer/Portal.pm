@@ -4,15 +4,22 @@ use Event 0.70 qw(time);
 use Carp;
 use Symbol;
 use Socket;
+use Storable 0.6 qw(store retrieve);
 use Sys::Hostname;
 use constant NICE => -1;
 use base 'Exporter';
-use vars qw($VERSION @EXPORT_OK $BasePort $Host $Port %PortInfo);
-$VERSION = '1.03';
+use vars qw($VERSION @EXPORT_OK $BasePort $Host $Port %PortInfo
+	    $StoreFile $StoreTop $Storer);
+$VERSION = '1.04';
 @EXPORT_OK = qw($Host $Port %PortInfo term);
 
 $BasePort = 7000;
 $Host = eval { hostname } || 'somewhere';
+
+$StoreFile = $0;
+$StoreFile =~ s,^.*/,,;
+$StoreFile =~ s/[-\._]//g;
+$StoreFile = "/var/tmp/$StoreFile" . '.npc';
 
 my $terminal;
 sub term {
@@ -31,6 +38,7 @@ sub register {
 
 sub default_start {
     require NetServer::Portal::Top;
+    require NetServer::Portal::Pi;
     eval {
 	NetServer::Portal->start();
 #	warn "Listening on ".(7000+($$%1000))."\n";
@@ -42,6 +50,21 @@ sub start {
     my ($class, $port) = @_;
     $Port = $port || $BasePort + $$ % 1000;
     
+    eval { $StoreTop = retrieve($StoreFile) };
+    if ($@) {
+	if ($@ =~ /No such file/) {
+	    # ok
+	} else {
+	    warn $@;
+	}
+	$StoreTop = {};
+    };
+    $Storer =
+	Event->idle(desc => "NetServer::Portal $StoreFile", parked=>1,
+		    min => 15, max => 300, nice => 1, cb => sub {
+			store $StoreTop, $StoreFile;
+		    });
+
     # Mostly snarfed from perlipc example; thanks!
     my $proto = getprotobyname('tcp');
     my $sock = gensym;
@@ -69,18 +92,22 @@ package NetServer::Portal::Client;
 use Carp;
 use constant NICE => -1;
 
-use vars qw(@DefaultDims);
-@DefaultDims = (80,24);
+use vars qw($Clients);
+$Clients = 0;
 
 require NetServer::Portal::Login;
 use constant LOGIN => 'NetServer::Portal::Login';
 
 sub init {
     my ($o, $sock) = @_;
+    if (!$Clients) {
+	$NetServer::Portal::Storer->repeat(1);
+	$NetServer::Portal::Storer->start;
+    }
+    ++$Clients;
     $o->{io} = Event->io(fd => $sock, nice => NICE,
 			 cb => [$o, 'cmd'],
 			 desc => ref($o)." $o->{from}");
-    @$o{'col', 'row'} = @DefaultDims;
     $o->set_screen(LOGIN);
     $o->refresh;
 }
@@ -102,7 +129,7 @@ sub set_screen {
     my $login = $o->{screens}{ &LOGIN };
     my $user = $login->{user} if
 	$login;
-    $o->{screens}{$to} = $to->new($user) if
+    $o->{screens}{$to} = $to->new($o, $user) if
 	$to && !exists $o->{screens}{$to};
     if ($to) {
 	$o->{screen} = $o->{screens}{$to};
@@ -118,9 +145,21 @@ sub set_screen {
     $o->{screen}
 }
 
+sub conf {
+    my ($o, $pkg) = @_;
+    my $login = $o->{screens}{ &LOGIN };
+    confess "eh?" if !$login;
+    my $user = $login->{user};
+    if (!$pkg) {
+	$NetServer::Portal::StoreTop->{$user}
+    } else {
+	$NetServer::Portal::StoreTop->{$user}{$pkg} ||= bless {}, $pkg;
+    }
+}
+
 sub format_line {
     my ($o) = @_;
-    my $col = $o->{col} - 1;
+    my $col = $o->conf->{cols} - 1;
     sub {
 	my $l;
 	if (@_ == 0) {
@@ -167,8 +206,11 @@ sub cmd {
     if ($in =~ s/\s*\n$//) {
 	#ok
     } else {
-	warn "input not terminated with newline";
+	$o->refresh;  # ^C pressed
+	return;
     }
+    $in =~ s/^\s+//;
+    $o->{screen}{error} = '';
 
     if ($in =~ m/^\!/) {
 	$o->{screens}{&LOGIN}->cmd($o, $in);
@@ -181,6 +223,11 @@ sub cmd {
 
 sub cancel {
     my ($o) = @_;
+    --$Clients;
+    if (!$Clients) {
+	$NetServer::Portal::Storer->repeat(0);
+	$NetServer::Portal::Storer->now;
+    }
 #    warn "$o->cancel\n";
     $o->set_screen();  # leave
     close $o->{io}->fd;

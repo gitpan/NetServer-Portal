@@ -1,5 +1,11 @@
 2000-03-09  Joshua Pritikin  <joshua.pritikin@db.com>
 
+	* Release 1.04.
+
+	* Added prototype introspector.
+
+	* Hooked up Storable.
+
 	* Release 1.03.
 
 	* Allow addition of new screens.

@@ -2,7 +2,7 @@ use strict;
 package NetServer::Portal::Top;
 use NetServer::Portal qw(term $Host);
 use Event qw(all_watchers QUEUES time);
-use Event::Stats 0.5 qw(round_seconds idle_time total_time);
+use Event::Stats 0.53 qw(round_seconds idle_time total_time);
 
 NetServer::Portal->register(cmd => "top",
 			    title => "Process Top",
@@ -13,13 +13,12 @@ use vars qw($NextID %ID2W %W2ID %OldW2ID);
 # keep state in a ref that can be saved with Storable...
 
 sub new {
-    my ($class, $user) = @_;
-    my $o = bless {
-		   seconds => round_seconds(60),
-		   filter => '',
-		   by => 't',
-		   page => 1,
-		  }, $class;
+    my ($class, $client) = @_;
+    my $o = $client->conf(__PACKAGE__);
+    $o->{seconds} ||= round_seconds(60);
+    $o->{filter} ||= '';
+    $o->{by} ||= 't';
+    $o->{page} ||= 1;
     $NextID ||= 1;
     $o;
 }
@@ -45,12 +44,12 @@ sub leave {
 sub reset_idmap {
     %OldW2ID = %W2ID;
     if ($NextID > 2*keys %OldW2ID) {
-	%OldW2ID=();  # too much fragmentation
+	%OldW2ID=();  # too much fragmentation, start over
     }
     $NextID = 1;
     %W2ID=();
 }
-sub assign_id {
+sub assign_id {  # assign unique ids without reassignments
     my ($w) = @_;
     my $id;
     if (exists $OldW2ID{ 0+$w } and !exists $ID2W{ $OldW2ID{ 0+$w } }) {
@@ -70,6 +69,7 @@ sub update {
 
     reset_idmap();
 
+    my $uconf = $c->conf;
     my $s = term->Tgoto('cm', 0, 0, $c->{io}->fd);
     # my $s = term->Tputs('cl',1,$c->{io}->fd);
     my $ln = $c->format_line;
@@ -79,7 +79,7 @@ sub update {
 
     my ($sec,$min,$hr) = localtime(time);
     my $tm = sprintf("| %02d:%02d:%02d [%4ds]", $hr,$min,$sec,$o->{seconds});
-    $s .= term->Tgoto('cm', $c->{col} - (1+length $tm), 0, $c->{io}->fd);
+    $s .= term->Tgoto('cm', $uconf->{cols} - (1+length $tm), 0, $c->{io}->fd);
     $s .= $tm."\n";
 
     my @load;
@@ -122,14 +122,14 @@ sub update {
 	if length $filter;
 
     $o->{page} = 1 if $o->{page} < 1;
-    my $rows_per_page = $c->{row} - 8;
+    my $rows_per_page = $uconf->{rows} - 8;
     my $maxpage = int((@all + $rows_per_page - 1)/$rows_per_page);
     $o->{page} = $maxpage if $o->{page} > $maxpage;
 
     my $page = " P$o->{page}";
     $s .= $ln->("  EID PRI STATE   RAN  TIME   CPU TYPE DESCRIPTION");
     my $start_row = 4;
-    $s .= term->Tgoto('cm', $c->{col} - (1+length $page), $start_row-1,
+    $s .= term->Tgoto('cm', $uconf->{cols} - (1+length $page), $start_row-1,
 		       $c->{io}->fd);
     $s .= $page."\n";
 
@@ -203,7 +203,7 @@ sub cmd {
     if ($in eq '') {
 	$o->{error} = '';
     } elsif ($in eq 'h' or $in eq '?') {
-	bless $o, 'NetServer::Portal::Top::Help';
+	$c->set_screen('NetServer::Portal::Top::Help');
     } elsif ($in =~ m/^d\s*(\d+)$/) {
 	$Event::DebugLevel = int $1;
     } elsif ($in =~ m/^o\s*(\w+)$/) {
@@ -242,11 +242,6 @@ sub cmd {
 	} else {
 	    $ev->suspend($do eq 's')
 	}
-    } elsif ($in =~ s/^\!//) {
-	my $v;
-	$v = eval $in;
-	$v = '<undef>' if !defined $v;
-	$o->{error} = $@? $@ : $v;
     } else {
 	$o->{error} = "'$in'?  Type 'h' for help!";
     }
@@ -314,14 +309,14 @@ use NetServer::Portal qw(term);
 sub new { bless { }, shift }
 
 sub update {
-    my ($o, $c) = @_;
+    my (undef, $c) = @_;
+    my $o = $c->conf('NetServer::Portal::Top');
     my $s = term->Tputs('cl',1,$c->{io}->fd);
     $s .= "NetServer::Portal Help
 
 
   CMD      DESCRIPTION                                  
   -------- -----------------------------------------------------------
-  ! <code> eval arbitrary perl code
   d #      set Event::DebugLevel                         [$Event::DebugLevel]
   e #id    edit event
   h        this screen
@@ -343,7 +338,7 @@ sub update {
 
 sub cmd {
     my ($o, $c, $in) = @_;
-    bless $o, 'NetServer::Portal::Top';
+    $c->set_screen('back');
 }
 
 1;

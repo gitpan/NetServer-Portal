@@ -1,21 +1,16 @@
-save settings with Storable!
-
-I would like to extend ProcessTop so you can walk around the symbol
-table in the tradition of cd & ls.
-
 TOP
   sort by type of watcher
   show 'die' stat in bold
   idle events are not display right (probably)?
+  make columns configurable?
 
-process detail screen
+process detail screen?
   exact @ARGV
   etc..
 
-display
+fancy display ideas
   ANSIColor support?
     highlight select events
-  make columns configurable
 
 rework documentation
 
