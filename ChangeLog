@@ -1,3 +1,13 @@
+2000-03-10  Joshua Pritikin  <joshua.pritikin@db.com>
+
+	* Release 1.05.
+
+	* Fleshed out vi-esque environment.  Added :help command.
+
+	* Lots of changes to !pi.
+
+	* Allow use of externally created socket.
+
 2000-03-09  Joshua Pritikin  <joshua.pritikin@db.com>
 
 	* Release 1.04.

@@ -10,7 +10,7 @@ use constant NICE => -1;
 use base 'Exporter';
 use vars qw($VERSION @EXPORT_OK $BasePort $Host $Port %PortInfo
 	    $StoreFile $StoreTop $Storer);
-$VERSION = '1.04';
+$VERSION = '1.05';
 @EXPORT_OK = qw($Host $Port %PortInfo term);
 
 $BasePort = 7000;
@@ -40,15 +40,30 @@ sub default_start {
     require NetServer::Portal::Top;
     require NetServer::Portal::Pi;
     eval {
-	NetServer::Portal->start();
+	my $sock = NetServer::Portal->new_socket();
+	NetServer::Portal->start($sock);
 #	warn "Listening on ".(7000+($$%1000))."\n";
     };
     if ($@) { warn; return }
 }
 
-sub start {
+sub new_socket {
     my ($class, $port) = @_;
     $Port = $port || $BasePort + $$ % 1000;
+    
+    # Mostly snarfed from perlipc example; thanks!
+    my $proto = getprotobyname('tcp');
+    my $sock = gensym;
+    socket($sock, PF_INET, SOCK_STREAM, $proto) or die "socket: $!";
+    setsockopt($sock, SOL_SOCKET, SO_REUSEADDR, pack('l', 1))
+	or die "setsockopt: $!";
+    bind($sock, sockaddr_in($Port, INADDR_ANY)) or die "bind: $!";
+    listen($sock, SOMAXCONN);
+    $sock;
+}
+
+sub start {
+    my ($class, $sock) = @_;
     
     eval { $StoreTop = retrieve($StoreFile) };
     if ($@) {
@@ -64,15 +79,6 @@ sub start {
 		    min => 15, max => 300, nice => 1, cb => sub {
 			store $StoreTop, $StoreFile;
 		    });
-
-    # Mostly snarfed from perlipc example; thanks!
-    my $proto = getprotobyname('tcp');
-    my $sock = gensym;
-    socket($sock, PF_INET, SOCK_STREAM, $proto) or die "socket: $!";
-    setsockopt($sock, SOL_SOCKET, SO_REUSEADDR, pack('l', 1))
-	or die "setsockopt: $!";
-    bind($sock, sockaddr_in($Port, INADDR_ANY)) or die "bind: $!";
-    listen($sock, SOMAXCONN);
 
     Event->io(fd => $sock, nice => NICE, cb => \&service_client,
 	      desc => "NetServer::Portal");
@@ -132,6 +138,10 @@ sub set_screen {
     $o->{screens}{$to} = $to->new($o, $user) if
 	$to && !exists $o->{screens}{$to};
     if ($to) {
+	if ($user) {
+	    my $c = $o->conf;
+	    $c->{screen} = $to;
+	}
 	$o->{screen} = $o->{screens}{$to};
 	die "$to->new failed"
 	    if !ref $o->{screen};

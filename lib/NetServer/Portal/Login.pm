@@ -46,13 +46,16 @@ sub update {
 }
 
 sub init_user {
-    my ($o, $id) = @_;
+    my ($o, $cl, $id) = @_;
     $o->{user} = $id;
     my $t = $NetServer::Portal::StoreTop;
     if (! exists $t->{$id}) {
 	my $u = $t->{$id} = {};
 	$u->{rows} = 24;
 	$u->{cols} = 80;
+	$u->{screen} = __PACKAGE__;
+    } else {
+	eval { $cl->set_screen($t->{$id}{screen}) };  # failure OK
     }
 }
 
@@ -62,7 +65,7 @@ sub cmd {
 	if ($in) {
 	    if ($in =~ m/^[a-zA-Z\d]+$/) {
 		# optional password protection XXX
-		$o->init_user($in);
+		$o->init_user($cl, $in);
 	    } else {
 		$o->{error} = "'$in' is not a valid login";
 	    }
