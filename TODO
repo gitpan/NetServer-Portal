@@ -1,3 +1,11 @@
+PI
+  integrate path resolver with ls & other places
+  restrict infinite introspection
+  line wrap option
+  make line numbering optional
+  fix # of lines to scroll by
+  when searching, mark match line with **
+
 TOP
   sort by type of watcher
   show 'die' stat in bold
@@ -8,15 +16,11 @@ process detail screen?
   exact @ARGV
   etc..
 
-fancy display ideas
-  ANSIColor support?
-    highlight select events
-
-rework documentation
+ANSIColor support?
 
 investigate getrusage
 
-restrict introspection
+documentation
 
 --------------------------------------------------------------------------------
 The original top looks like this:

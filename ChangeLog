@@ -1,12 +1,24 @@
 2000-03-10  Joshua Pritikin  <joshua.pritikin@db.com>
 
+	* Release 1.06.
+
+	* Plugged in a path resolver.
+
+	* Fixed symbol table walker.
+
+	* Escape control characters.
+	
+	* :w <file> command.
+
+	* Display sizing was inconsistent.  Fixed.
+
 	* Release 1.05.
 
 	* Fleshed out vi-esque environment.  Added :help command.
 
 	* Lots of changes to !pi.
 
-	* Allow use of externally created socket.
+	* Allow use of externally created socket (suggested by Graham Barr).
 
 2000-03-09  Joshua Pritikin  <joshua.pritikin@db.com>
 
