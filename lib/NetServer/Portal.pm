@@ -1,0 +1,215 @@
+use strict;
+package NetServer::Portal;
+use Event 0.70 qw(time);
+use Carp;
+use Symbol;
+use Socket;
+use Sys::Hostname;
+use constant NICE => -1;
+use base 'Exporter';
+use vars qw($VERSION @EXPORT_OK $BasePort $Host $Port %PortInfo);
+$VERSION = '1.03';
+@EXPORT_OK = qw($Host $Port %PortInfo term);
+
+$BasePort = 7000;
+$Host = eval { hostname } || 'somewhere';
+
+my $terminal;
+sub term {
+    return $terminal
+	if $terminal;
+    require Term::Cap;
+    $terminal = Term::Cap->Tgetent({ TERM => 'xterm', OSPEED => 9600 });
+}
+
+sub register {
+    shift;
+    my %attr = @_;
+    confess "no package" if !exists $attr{package};
+    $PortInfo{ $attr{package} } = \%attr;
+}
+
+sub default_start {
+    require NetServer::Portal::Top;
+    eval {
+	NetServer::Portal->start();
+#	warn "Listening on ".(7000+($$%1000))."\n";
+    };
+    if ($@) { warn; return }
+}
+
+sub start {
+    my ($class, $port) = @_;
+    $Port = $port || $BasePort + $$ % 1000;
+    
+    # Mostly snarfed from perlipc example; thanks!
+    my $proto = getprotobyname('tcp');
+    my $sock = gensym;
+    socket($sock, PF_INET, SOCK_STREAM, $proto) or die "socket: $!";
+    setsockopt($sock, SOL_SOCKET, SO_REUSEADDR, pack('l', 1))
+	or die "setsockopt: $!";
+    bind($sock, sockaddr_in($Port, INADDR_ANY)) or die "bind: $!";
+    listen($sock, SOMAXCONN);
+
+    Event->io(fd => $sock, nice => NICE, cb => \&service_client,
+	      desc => "NetServer::Portal");
+}
+
+sub service_client {
+    my ($e) = @_;
+    my $sock = gensym;
+    my $paddr = accept $sock, $e->w->fd or die "accept: $!";
+    my ($port,$iaddr) = sockaddr_in($paddr);
+    (bless {
+	    from => gethostbyaddr($iaddr, AF_INET) || inet_ntoa($iaddr),
+	   }, 'NetServer::Portal::Client')->init($sock);
+}
+
+package NetServer::Portal::Client;
+use Carp;
+use constant NICE => -1;
+
+use vars qw(@DefaultDims);
+@DefaultDims = (80,24);
+
+require NetServer::Portal::Login;
+use constant LOGIN => 'NetServer::Portal::Login';
+
+sub init {
+    my ($o, $sock) = @_;
+    $o->{io} = Event->io(fd => $sock, nice => NICE,
+			 cb => [$o, 'cmd'],
+			 desc => ref($o)." $o->{from}");
+    @$o{'col', 'row'} = @DefaultDims;
+    $o->set_screen(LOGIN);
+    $o->refresh;
+}
+
+sub set_screen {
+    my ($o, $to) = @_;
+
+    $to = $o->{prev_screen} if 
+	$to && $to eq 'back';
+    if ($o->{screen}) {
+	$to = LOGIN
+	    if $to && $to eq ref $o->{screen};
+	$o->{prev_screen} = ref $o->{screen};
+	$o->{screen}->leave
+	    if $o->{screen}->can('leave');
+	$o->{io}->timeout(undef);
+    }
+
+    my $login = $o->{screens}{ &LOGIN };
+    my $user = $login->{user} if
+	$login;
+    $o->{screens}{$to} = $to->new($user) if
+	$to && !exists $o->{screens}{$to};
+    if ($to) {
+	$o->{screen} = $o->{screens}{$to};
+	die "$to->new failed"
+	    if !ref $o->{screen};
+	$o->{screen}{error} = '';
+	$o->{screen}->enter($o)
+	    if $o->{screen}->can('enter');
+    } else {
+	# logging out
+    }
+    $o->{needs_clear}=1;
+    $o->{screen}
+}
+
+sub format_line {
+    my ($o) = @_;
+    my $col = $o->{col} - 1;
+    sub {
+	my $l;
+	if (@_ == 0) {
+	    $l = '';
+	} elsif (@_ == 1) {
+	    $l = $_[0]
+	} else {
+	    my $fmt = shift @_;
+	    $l = sprintf $fmt, @_;
+	}
+	if (length $l < $col) { $l .= ' 'x($col - length $l); }
+	elsif (length $l > $col) { $l = substr($l,0,$col) }
+	$l .= "\n";
+	$l;
+    }
+}
+
+sub refresh {
+    my ($o) = @_;
+
+    my $buf;
+    if ($o->{needs_clear}) {
+	$o->{needs_clear} = 0;
+	$buf .= NetServer::Portal::term->Tputs('cl',1,$o->{io}->fd);
+    }
+    $buf .= $o->{screen}->update($o);
+
+    # Deliberately ignore partial writes.  We do *not* want to block
+    # here!  It is better to send half a screen and let the user
+    # request an explicit update.
+    #
+    return $o->cancel if !defined syswrite $o->{io}->fd, $buf, length $buf;
+}
+
+sub cmd {
+    my ($o, $e) = @_;
+    if ($e->got eq 't') {
+	$o->refresh;
+	return;
+    }
+    my $in;
+    return $o->cancel if !sysread $e->w->fd, $in, 200;
+
+    if ($in =~ s/\s*\n$//) {
+	#ok
+    } else {
+	warn "input not terminated with newline";
+    }
+
+    if ($in =~ m/^\!/) {
+	$o->{screens}{&LOGIN}->cmd($o, $in);
+    } else {
+	$o->{screen}->cmd($o, $in);
+    }
+    $o->refresh
+	if $o->{io};
+}
+
+sub cancel {
+    my ($o) = @_;
+#    warn "$o->cancel\n";
+    $o->set_screen();  # leave
+    close $o->{io}->fd;
+    $o->{io}->cancel;
+    $o->{io} = undef;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+NetServer::Portal - Interactively Manipulate Daemon Processes
+
+=head1 SYNOPSIS
+
+  require NetServer::Portal;
+
+  'NetServer::Portal'->start();  # creates server
+  warn "NetServer::Portal listening on port ".(7000+($$ % 1000))."\n";
+
+=head1 DESCRIPTION
+
+This module implements a framework for adding interactive windows into
+daemon processes.  The portal server listens on port 7000+($$%1000) by
+default.
+
+A C<top>-like server is included that can help debug complicated event
+loops.
+
+=cut

@@ -1,0 +1,10 @@
+ChangeLog
+MANIFEST
+MANIFEST.SKIP
+Makefile.PL
+README
+TODO
+demo/top.pl
+lib/NetServer/Portal.pm
+lib/NetServer/Portal/Login.pm
+lib/NetServer/Portal/Top.pm
