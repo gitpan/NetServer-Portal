@@ -1,3 +1,5 @@
-NetServer::ProcessTop
+NetServer::Portal
 
-This module sets up a mini-server accessible via telnet
+Sets up a mini-server accessible via telnet.
+
+This module supplants NetServer::ProcessTop.

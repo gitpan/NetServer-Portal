@@ -2,7 +2,7 @@ use strict;
 package NetServer::Portal::Top;
 use NetServer::Portal qw(term $Host);
 use Event qw(all_watchers QUEUES time);
-use Event::Stats 0.53 qw(round_seconds idle_time total_time);
+use Event::Stats 0.7 qw(round_seconds idle_time total_time);
 
 NetServer::Portal->register(cmd => "top",
 			    title => "Process Top",

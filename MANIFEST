@@ -9,3 +9,4 @@ lib/NetServer/Portal.pm
 lib/NetServer/Portal/Login.pm
 lib/NetServer/Portal/Pi.pm
 lib/NetServer/Portal/Top.pm
+t/load.t

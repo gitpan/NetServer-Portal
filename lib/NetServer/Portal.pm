@@ -10,7 +10,7 @@ use constant NICE => -1;
 use base 'Exporter';
 use vars qw($VERSION @EXPORT_OK $BasePort $Host $Port %PortInfo
 	    $StoreFile $StoreTop $Storer);
-$VERSION = '1.06';
+$VERSION = '1.07';
 @EXPORT_OK = qw($Host $Port %PortInfo term);
 
 $BasePort = 7000;
@@ -34,6 +34,11 @@ sub register {
     my %attr = @_;
     confess "no package" if !exists $attr{package};
     $PortInfo{ $attr{package} } = \%attr;
+}
+
+sub set_storefile {
+    my ($class, $path) = @_;
+    $StoreFile = $path;
 }
 
 sub default_start {
@@ -257,7 +262,7 @@ NetServer::Portal - Interactively Manipulate Daemon Processes
 
   require NetServer::Portal;
 
-  'NetServer::Portal'->start();  # creates server
+  'NetServer::Portal'->default_start();  # creates server
   warn "NetServer::Portal listening on port ".(7000+($$ % 1000))."\n";
 
 =head1 DESCRIPTION
