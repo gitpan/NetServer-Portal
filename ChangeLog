@@ -1,4 +1,16 @@
+2000-12-04  Joshua Pritikin  <joshua.pritikin@db.com>
+
+	* Release 1.08.
+
+	* Add Event::Stats to PREREQ. (paul@miraclefish.com)
+
+2000-05-19  Joshua Pritikin  <joshua.pritikin@db.com>
+
+	* Add Scalar::Util to PREREQ.
+
 2000-03-15  Joshua Pritikin  <joshua.pritikin@db.com>
+
+	* Remove is_queued().
 
 	* Release 1.07.
 

@@ -164,7 +164,6 @@ sub update {
 		    # make look pretty!
 		    if ($e->is_suspended) {
 			'S'.(($e->is_active? 'W':'').
-			     ($e->is_queued?'Q':'').
 			     ($e->is_running?'R':''))
 		    } elsif ($e->is_running) {
 			'cpu'
@@ -215,6 +214,10 @@ sub cmd {
 	}
     } elsif ($in =~ m/^p\s*(\d+)$/) {
 	$o->{page} = $1 || 1;
+    } elsif ($in =~ m/^(\,+)$/) {  # compatible with Pi key bindings
+	$o->{page} -= length $1;
+    } elsif ($in =~ m/^(\.+)$/) {
+	$o->{page} += length $1;
     } elsif ($in =~ m/^e\s*(\d+)$/) {
 	my $got = $ID2W{$1};
 	if ($got) {
@@ -258,6 +261,11 @@ sub update {
     my $s = term->Tputs('cl',1,$c->{io}->fd);
     $s .= "Event Minieditor"."\n"x3;
     my $e = $o->{edit};
+    if (!$e) {
+	delete $o->{edit};
+	$c->set_screen('NetServer::Portal::Top');
+	return;
+    }
     my $f = 'a';
     for my $k ($e->attributes) {
 	my $v = $e->$k();

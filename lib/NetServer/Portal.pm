@@ -10,7 +10,7 @@ use constant NICE => -1;
 use base 'Exporter';
 use vars qw($VERSION @EXPORT_OK $BasePort $Host $Port %PortInfo
 	    $StoreFile $StoreTop $Storer);
-$VERSION = '1.07';
+$VERSION = '1.08';
 @EXPORT_OK = qw($Host $Port %PortInfo term);
 
 $BasePort = 7000;
@@ -273,5 +273,9 @@ default.
 
 A C<top>-like server is included that can help debug complicated event
 loops.
+
+=head1 SEE ALSO
+
+L<NetServer::Portal::Pi>, L<NetServer::Portal::Top>
 
 =cut
